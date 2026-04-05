@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>VenteBot — Assistant IA ERP</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #f0fdf4; color: #1a202c; }
+  header { background: #059669; color: white; padding: 1rem 2rem; display: flex; align-items: center; gap: 1rem; }
+  header h1 { font-size: 1.4rem; }
+  header span { font-size: 2rem; }
+  .container { display: grid; grid-template-columns: 1fr 2fr; gap: 1.5rem; padding: 1.5rem; max-width: 1400px; margin: 0 auto; }
+  .card { background: white; border-radius: 12px; padding: 1.2rem; box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8rem; margin-bottom: 1rem; }
+  .stat { background: #f0fdf4; border-radius: 8px; padding: 0.8rem; text-align: center; }
+  .stat .val { font-size: 1.6rem; font-weight: bold; color: #059669; }
+  .stat .lbl { font-size: 0.75rem; color: #64748b; margin-top: 2px; }
+  .chat-box { height: 400px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; padding: 1rem; margin-bottom: 1rem; background: #f8fafc; }
+  .msg { margin-bottom: 0.8rem; }
+  .msg.user .bubble { background: #059669; color: white; margin-left: auto; }
+  .msg.bot .bubble { background: white; border: 1px solid #e2e8f0; }
+  .bubble { display: inline-block; padding: 0.6rem 1rem; border-radius: 12px; max-width: 85%; font-size: 0.9rem; line-height: 1.5; }
+  .msg.user { text-align: right; }
+  .chat-input { display: flex; gap: 0.5rem; }
+  .chat-input input { flex: 1; border: 1px solid #e2e8f0; border-radius: 8px; padding: 0.7rem 1rem; font-size: 0.95rem; outline: none; }
+  .chat-input input:focus { border-color: #059669; }
+  .chat-input button { background: #059669; color: white; border: none; border-radius: 8px; padding: 0.7rem 1.2rem; cursor: pointer; font-size: 0.95rem; }
+  .chat-input button:hover { background: #047857; }
+  .sql-preview { background: #1e293b; color: #94a3b8; font-family: monospace; font-size: 0.78rem; padding: 0.6rem; border-radius: 6px; margin-top: 0.4rem; white-space: pre-wrap; }
+  .suggestions { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.8rem; }
+  .suggestions button { background: #f0fdf4; color: #059669; border: 1px solid #a7f3d0; border-radius: 20px; padding: 0.3rem 0.8rem; font-size: 0.8rem; cursor: pointer; }
+  .suggestions button:hover { background: #dcfce7; }
+  .results table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  .results th { background: #059669; color: white; padding: 0.5rem; text-align: left; }
+  .results td { padding: 0.5rem; border-bottom: 1px solid #e2e8f0; }
+  .results tr:hover td { background: #f0fdf4; }
+  h2 { font-size: 1rem; color: #374151; margin-bottom: 0.8rem; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 0.75rem; font-weight: 600; }
+  .badge-green { background: #dcfce7; color: #166534; }
+  .badge-orange { background: #fff7ed; color: #9a3412; }
+  .badge-red { background: #fee2e2; color: #991b1b; }
+  .alert { background: #fef2f2; border-left: 4px solid #ef4444; padding: 0.6rem 1rem; border-radius: 4px; font-size: 0.85rem; margin-bottom: 0.5rem; }
+</style>
+</head>
+<body>
+<header>
+  <span>🛒</span>
+  <div>
+    <h1>VenteBot</h1>
+    <small>Assistant IA — Gestion Commerciale ERP</small>
+  </div>
+</header>
+
+<div class="container">
+  <!-- Colonne gauche -->
+  <div>
+    <div class="card" style="margin-bottom:1rem">
+      <h2>📊 Indicateurs clés</h2>
+      <div class="stats-grid" id="stats">
+        <div class="stat"><div class="val">—</div><div class="lbl">CA total (FCFA)</div></div>
+        <div class="stat"><div class="val">—</div><div class="lbl">CA ce mois</div></div>
+        <div class="stat"><div class="val">—</div><div class="lbl">Commandes en cours</div></div>
+        <div class="stat"><div class="val">—</div><div class="lbl">Ruptures de stock</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>⚠️ Alertes stock</h2>
+      <div id="ruptures"><p style="color:#94a3b8;font-size:0.85rem">Chargement...</p></div>
+    </div>
+  </div>
+
+  <!-- Colonne droite : Chat -->
+  <div class="card">
+    <h2>💬 Assistant VenteBot</h2>
+    <div class="suggestions">
+      <button onclick="ask('Quels produits sont en rupture de stock ?')">Ruptures stock</button>
+      <button onclick="ask('Quel est le chiffre d\'affaires du mois de mars 2026 ?')">CA mars 2026</button>
+      <button onclick="ask('Liste les 5 meilleurs clients')">Top clients</button>
+      <button onclick="ask('Quelles commandes ne sont pas encore payées ?')">Impayés</button>
+      <button onclick="ask('Quel est le produit le plus vendu ?')">Best-seller</button>
+    </div>
+
+    <div class="chat-box" id="chat-box">
+      <div class="msg bot">
+        <div class="bubble">👋 Bonjour ! Je suis VenteBot, votre assistant commercial.<br>Interrogez votre base de données en langage naturel : ventes, stocks, clients, commandes...</div>
+      </div>
+    </div>
+
+    <div class="chat-input">
+      <input type="text" id="user-input" placeholder="Ex: Quel est le produit le plus vendu ce mois ?" onkeypress="if(event.key==='Enter') sendMessage()">
+      <button onclick="sendMessage()">Envoyer ➤</button>
+    </div>
+
+    <div id="results-section" style="margin-top:1rem; display:none">
+      <h2>📋 Résultats</h2>
+      <div class="results" id="results-table"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '';  // Remplacer par l'URL de votre backend
+
+function fmt(n) {
+  if (n == null) return '—';
+  return Number(n).toLocaleString('fr-SN') + ' FCFA';
+}
+
+async function loadStats() {
+  try {
+    const r = await fetch(`${API}/api/dashboard`);
+    const d = await r.json();
+    const grid = document.getElementById('stats');
+    const vals = [fmt(d.ca_total), fmt(d.ca_mois), d.commandes_en_cours, d.ruptures_stock];
+    grid.querySelectorAll('.val').forEach((el, i) => el.textContent = vals[i] ?? '—');
+  } catch(e) { console.warn('Stats non disponibles'); }
+}
+
+async function loadRuptures() {
+  try {
+    const r = await fetch(`${API}/api/produits/ruptures`);
+    const data = await r.json();
+    const container = document.getElementById('ruptures');
+    if (!data.length) {
+      container.innerHTML = '<p style="color:#22c55e;font-size:0.85rem">✅ Aucune rupture de stock</p>';
+      return;
+    }
+    container.innerHTML = data.map(p => `
+      <div class="alert">
+        <strong>${p.nom}</strong> — Stock : <strong>${p.stock_actuel}</strong> ${p.unite} (min: ${p.stock_minimum})
+      </div>`).join('');
+  } catch(e) { console.warn('Ruptures non disponibles'); }
+}
+
+function ask(q) {
+  document.getElementById('user-input').value = q;
+  sendMessage();
+}
+
+function addMessage(role, text, sql = null) {
+  const box = document.getElementById('chat-box');
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.innerHTML = `<div class="bubble">${text}${sql ? `<div class="sql-preview">${sql}</div>` : ''}</div>`;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+async function sendMessage() {
+  const input = document.getElementById('user-input');
+  const question = input.value.trim();
+  if (!question) return;
+  input.value = '';
+  addMessage('user', question);
+  addMessage('bot', '⏳ Analyse en cours...');
+
+  try {
+    const r = await fetch(`${API}/api/chat`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ question })
+    });
+    const data = await r.json();
+    document.querySelector('.msg.bot:last-child').remove();
+    addMessage('bot', data.answer + (data.count !== undefined ? ` (${data.count} résultat${data.count > 1 ? 's' : ''})` : ''), data.sql);
+
+    if (data.data && data.data.length > 0) {
+      const section = document.getElementById('results-section');
+      section.style.display = 'block';
+      const keys = Object.keys(data.data[0]);
+      const rows = data.data.map(row => `<tr>${keys.map(k => `<td>${row[k] ?? ''}</td>`).join('')}</tr>`).join('');
+      document.getElementById('results-table').innerHTML = `<table><thead><tr>${keys.map(k=>`<th>${k}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>`;
+    }
+  } catch(e) {
+    document.querySelector('.msg.bot:last-child').remove();
+    addMessage('bot', '❌ Erreur de connexion au serveur.');
+  }
+}
+
+loadStats();
+loadRuptures();
+</script>
+</body>
+</html>
